@@ -1,0 +1,5 @@
+{
+  "name": "Paper Plane Drift",
+  "description": "A minimal notebook-styled endurance game. Guide the paper plane, dodge falling pencils, avoid sticky tape, and collect erasers. Features AI-powered report cards.",
+  "requestFramePermissions": []
+}

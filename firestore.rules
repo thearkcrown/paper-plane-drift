@@ -1,0 +1,77 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for validation
+    function isValidUserId(userId) {
+      return userId is string
+        && userId.size() >= 1
+        && userId.size() <= 128; // CrazyGames user IDs
+    }
+
+    function isValidUsername(username) {
+      return username is string
+        && username.size() >= 1
+        && username.size() <= 50; // CrazyGames usernames
+    }
+
+    function isValidScore(score) {
+      return score is number
+        && score >= 0
+        && score <= 999999; // Max reasonable score
+    }
+
+    function isValidGrade(grade) {
+      return grade is string
+        && grade.size() <= 5
+        && grade.matches('^[A-F][+-]?$'); // Grades like A+, B, C-, F
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp
+        && ts <= request.time // Cannot be in the future
+        && ts > request.time - duration.value(5, 'm'); // Must be within last 5 minutes
+    }
+
+    function isValidHighScoreData(data) {
+      return data.keys().hasAll(['userId', 'username', 'score', 'grade', 'timestamp'])
+        && data.keys().hasOnly(['userId', 'username', 'score', 'grade', 'timestamp'])
+        && isValidUserId(data.userId)
+        && isValidUsername(data.username)
+        && isValidScore(data.score)
+        && isValidGrade(data.grade)
+        && isValidTimestamp(data.timestamp);
+    }
+
+    // Rate limiting: max 5 submissions per IP/user in 5 minutes
+    // This is basic - for production, consider using Firebase Cloud Functions with rate limiting
+    function notRateLimited() {
+      // Allow if no previous submissions exist
+      return true; // TODO: Implement proper rate limiting in Cloud Functions
+    }
+
+    // High Scores Collection Rules
+    match /highscores/{scoreId} {
+      // Allow anyone to read leaderboard (public game)
+      allow read: if true;
+
+      // Allow create only with valid data
+      allow create: if isValidHighScoreData(request.resource.data)
+        && notRateLimited();
+
+      // Allow updates only for the same user with higher score
+      allow update: if isValidHighScoreData(request.resource.data)
+        && request.resource.data.userId == resource.data.userId  // Same user
+        && request.resource.data.score > resource.data.score;    // Higher score only
+
+      // Prevent deletes to maintain leaderboard integrity
+      allow delete: if false;
+    }
+
+    // Deny access to all other collections by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
